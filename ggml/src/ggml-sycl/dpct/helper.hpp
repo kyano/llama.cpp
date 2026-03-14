@@ -692,7 +692,8 @@ namespace dpct
             "use total memory as free memory";
 #if (defined(__SYCL_COMPILER_VERSION) && __SYCL_COMPILER_VERSION >= 20221105)
         if (!has(sycl::aspect::ext_intel_free_memory)) {
-          std::cerr << warning_info << std::endl;
+          // XXX: iGPU (at least Intel Arc graphics in MeteorLake-H) does not support this.
+          // std::cerr << warning_info << std::endl;
           free_memory = total_memory;
         } else {
           free_memory = get_info<sycl::ext::intel::info::device::free_memory>();
