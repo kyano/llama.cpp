@@ -253,13 +253,10 @@ option(GGML_SYCL_SUPPORT_LEVEL_ZERO_API     "ggml: use Level Zero API in SYCL ba
 option(GGML_SYCL_DNN                        "ggml: enable oneDNN in the SYCL backend"         ON)
 set   (GGML_SYCL_TARGET "INTEL" CACHE STRING
                                             "ggml: sycl target device")
-set   (GGML_SYCL_DEVICE_ARCH "" CACHE STRING
-                                            "ggml: sycl device architecture")
-
 option(GGML_OPENVINO                        "ggml: use OPENVINO"                              OFF)
 option(GGML_ET                              "ggml: use ET backend"                            OFF)
 option(GGML_ET_SYSEMU                       "ggml: use ET backend via sysemu"                 OFF)
-
+set   (GGML_SYCL_GPU_ARCH "" CACHE STRING   "ggml: sycl target GPU architecture for ocloc")
 option(GGML_OPENCL                          "ggml: use OpenCL"                                OFF)
 option(GGML_OPENCL_PROFILING                "ggml: use OpenCL profiling (increases overhead)" OFF)
 option(GGML_OPENCL_EMBED_KERNELS            "ggml: embed kernels"                             ON)

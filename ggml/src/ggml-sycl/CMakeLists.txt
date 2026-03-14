@@ -164,10 +164,24 @@ endif()
 
 if (GGML_SYCL_TARGET STREQUAL "INTEL")
     add_compile_definitions(GGML_SYCL_WARP_SIZE=16)
-    if (NOT GGML_SYCL_DEVICE_ARCH)
-        target_link_options(ggml-sycl PRIVATE -Xs -ze-intel-greater-than-4GB-buffer-required)
+    # XXX: Choose the constant number `12` just for my local setup.
+    #include(ProcessorCount)
+    #ProcessorCount(THREAD_COUNT)
+    set(THREAD_COUNT 12)
+    target_link_options(ggml-sycl PRIVATE
+        -fsycl-targets=spir64_gen
+        -fsycl-device-code-split=per_kernel
+        -fsycl-max-parallel-link-jobs=${THREAD_COUNT}
+    )
+    if (GGML_SYCL_GPU_ARCH)
+        target_link_options(ggml-sycl PRIVATE
+            -Xsycl-target-backend=spir64_gen
+            "-device ${GGML_SYCL_GPU_ARCH} -options \"-ze-opt-greater-than-4GB-buffer-required\""
+        )
     else()
-        message(STATUS "Skipping -ze-intel-greater-than-4GB-buffer-required for spir64_gen AOT")
+        target_link_options(ggml-sycl PRIVATE
+            -Xsycl-target-backend=spir64_gen "-options \"-ze-opt-greater-than-4GB-buffer-required\""
+        )
     endif()
 
     # Link against Intel oneMKL
@@ -190,29 +204,4 @@ endif()
 if (GGML_SYCL_HOST_MEM_FALLBACK)
     message(STATUS "find GGML_SYCL_HOST_MEM_FALLBACK")
     target_compile_definitions(ggml-sycl PRIVATE GGML_SYCL_HOST_MEM_FALLBACK)
-endif()
-
-if (GGML_SYCL_DEVICE_ARCH)
-    message(STATUS "GGML_SYCL_DEVICE_ARCH=${GGML_SYCL_DEVICE_ARCH} (AOT via spir64_gen)")
-    target_compile_options(
-        ggml-sycl PRIVATE
-        -fsycl-targets=spir64_gen
-        "SHELL:-Xsycl-target-backend=spir64_gen \"-device ${GGML_SYCL_DEVICE_ARCH}\""
-    )
-
-    # Pass through parallel job (process) count for parallelising the
-    # `llvm-foreach -- ocloc` invocation for compiling AOT device images.
-    include(ProcessorCount)
-    ProcessorCount(_ggml_sycl_nproc)
-    if (_ggml_sycl_nproc LESS 1)
-        set(_ggml_sycl_nproc 1)
-    endif()
-    set(GGML_SYCL_MAX_PARALLEL_LINK_JOBS ${_ggml_sycl_nproc} CACHE STRING
-        "Parallel ocloc jobs for spir64_gen AOT device-image lowering")
-    target_link_options(
-        ggml-sycl PRIVATE
-        -fsycl-targets=spir64_gen
-        "SHELL:-Xsycl-target-backend=spir64_gen \"-device ${GGML_SYCL_DEVICE_ARCH}\""
-        -fsycl-max-parallel-link-jobs=${GGML_SYCL_MAX_PARALLEL_LINK_JOBS}
-    )
 endif()
