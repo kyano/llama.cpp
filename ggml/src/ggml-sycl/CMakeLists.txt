@@ -170,10 +170,30 @@ endif()
 
 if (GGML_SYCL_TARGET STREQUAL "INTEL")
     add_compile_definitions(GGML_SYCL_WARP_SIZE=16)
-    if (NOT GGML_SYCL_DEVICE_ARCH)
-        target_link_options(ggml-sycl PRIVATE -Xs -ze-intel-greater-than-4GB-buffer-required)
+    # XXX: Choose the constant number `12` just for my local setup.
+    #include(ProcessorCount)
+    #ProcessorCount(THREAD_COUNT)
+    set(THREAD_COUNT 12)
+    target_link_options(ggml-sycl PRIVATE
+        -fsycl-targets=spir64_gen
+        -fsycl-device-code-split=per_kernel
+        -fsycl-max-parallel-link-jobs=${THREAD_COUNT}
+    )
+    if (GGML_SYCL_GPU_ARCH)
+        target_link_options(ggml-sycl PRIVATE
+            -Xsycl-target-backend=spir64_gen
+            "-device ${GGML_SYCL_GPU_ARCH} -options \"-ze-opt-greater-than-4GB-buffer-required\""
+        )
+        if (GGML_SYCL_XMX_AOT_SG)
+            target_compile_definitions(ggml-sycl PRIVATE GGML_SYCL_XMX_AOT_SG=${GGML_SYCL_XMX_AOT_SG})
+        else()
+            target_compile_definitions(ggml-sycl PRIVATE GGML_SYCL_XMX_AOT_SG=0)
+        endif()
     else()
-        message(STATUS "Skipping -ze-intel-greater-than-4GB-buffer-required for spir64_gen AOT")
+        target_link_options(ggml-sycl PRIVATE
+            -Xsycl-target-backend=spir64_gen
+            "-options \"-ze-opt-greater-than-4GB-buffer-required\""
+        )
     endif()
 
     # Link against Intel oneMKL
@@ -196,52 +216,4 @@ endif()
 if (GGML_SYCL_HOST_MEM_FALLBACK)
     message(STATUS "find GGML_SYCL_HOST_MEM_FALLBACK")
     target_compile_definitions(ggml-sycl PRIVATE GGML_SYCL_HOST_MEM_FALLBACK)
-endif()
-
-if (GGML_SYCL_DEVICE_ARCH)
-    message(STATUS "GGML_SYCL_DEVICE_ARCH=${GGML_SYCL_DEVICE_ARCH} (AOT via spir64_gen)")
-    target_compile_options(
-        ggml-sycl PRIVATE
-        -fsycl-targets=spir64_gen
-        "SHELL:-Xsycl-target-backend=spir64_gen \"-device ${GGML_SYCL_DEVICE_ARCH}\""
-    )
-
-    # Pass through parallel job (process) count for parallelising the
-    # `llvm-foreach -- ocloc` invocation for compiling AOT device images.
-    include(ProcessorCount)
-    ProcessorCount(_ggml_sycl_nproc)
-    if (_ggml_sycl_nproc LESS 1)
-        set(_ggml_sycl_nproc 1)
-    endif()
-    set(GGML_SYCL_MAX_PARALLEL_LINK_JOBS ${_ggml_sycl_nproc} CACHE STRING
-        "Parallel ocloc jobs for spir64_gen AOT device-image lowering")
-    target_link_options(
-        ggml-sycl PRIVATE
-        -fsycl-targets=spir64_gen
-        "SHELL:-Xsycl-target-backend=spir64_gen \"-device ${GGML_SYCL_DEVICE_ARCH}\""
-        -fsycl-max-parallel-link-jobs=${GGML_SYCL_MAX_PARALLEL_LINK_JOBS}
-    )
-
-    # The XMX dequant-GEMM tiles need the sub-group size of the target: 8 on Xe-HPG (DG2, ARL-H),
-    # 16 on Xe-HPC and Xe2 or newer. ocloc fails on the other size, so build only the one that fits.
-    # 0 (unknown name, mixed list, or no XMX) builds no XMX tile and the path stays off.
-    set(_ggml_sycl_xmx_sg "")
-    string(TOLOWER "${GGML_SYCL_DEVICE_ARCH}" _ggml_sycl_archs)
-    string(REPLACE "," ";" _ggml_sycl_archs "${_ggml_sycl_archs}")
-    foreach(_arch IN LISTS _ggml_sycl_archs)
-        if (_arch MATCHES "^(dg2|acm|ats-m|arl-h|xe-hpg|12\\.5[567]\\.|12\\.74\\.)")
-            set(_sg 8)
-        elseif (_arch MATCHES "^(pvc|bmg|lnl|ptl|wcl|nvl|cri|xe2|xe3|xe-hpc|12\\.60\\.|20\\.|30\\.)")
-            set(_sg 16)
-        else()
-            set(_sg 0)
-        endif()
-        if (_ggml_sycl_xmx_sg STREQUAL "" OR _ggml_sycl_xmx_sg EQUAL _sg)
-            set(_ggml_sycl_xmx_sg ${_sg})
-        else()
-            set(_ggml_sycl_xmx_sg 0)
-        endif()
-    endforeach()
-    message(STATUS "GGML_SYCL_DEVICE_ARCH: XMX dequant-GEMM sub-group size ${_ggml_sycl_xmx_sg} (0 = off)")
-    target_compile_definitions(ggml-sycl PRIVATE GGML_SYCL_XMX_AOT_SG=${_ggml_sycl_xmx_sg})
 endif()
