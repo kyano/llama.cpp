@@ -1365,7 +1365,7 @@ json oaicompat_chat_params_parse(
     {
         int reasoning_budget = json_value(body, "reasoning_budget_tokens",
                                json_value(body, "thinking_budget_tokens", -1));
-        if (reasoning_budget == -1) {
+        if (!body.contains("reasoning_budget_tokens") && !body.contains("thinking_budget_tokens")) {
             reasoning_budget = opt.reasoning_budget;
         }
 
