@@ -182,6 +182,11 @@ private:
     }
 
     void on_line(child_t & c, const std::string & line) {
+        // skip blank lines: the leading \n that notify_to_router writes to delimit
+        // the command on the combined stdout/stderr pipe appears as an empty line
+        if (string_strip(line).empty()) {
+            return;
+        }
         if (string_starts_with(line, CMD_CHILD_TO_ROUTER_STATE)) {
             LOG_DBG("[%5d] %s", c.port, line.c_str()); // prevent spamming the log
             models.handle_child_state(c.name, line);
