@@ -45,6 +45,23 @@ constexpr constant static float kvalues_mxfp4_f[16] = {
     0, .5f, 1.f, 1.5f, 2.f, 3.f, 4.f, 6.f, -0, -.5f, -1.f, -1.5f, -2.f, -3.f, -4.f, -6.f
 };
 
+// UE4M3: unsigned, 4 exp bits (bias=7), 3 mantissa bits
+static inline float ue4m3_to_fp32(uint8_t x) {
+    if ((x & 0x7F) == 0 || (x & 0x7F) == 0x7F) {
+        return 0.0f;
+    }
+
+    const uint32_t exp = (x >> 3) & 0xF;
+    const uint32_t man = x & 0x7;
+
+    if (exp == 0) {
+        return (float) man * (1.0f / 512.0f);
+    }
+
+    const uint32_t bits = ((exp + 120) << 23) | (man << 20);
+    return as_type<float>(bits);
+}
+
 static inline int best_index_int8(int n, constant float * val, float x) {
     if (x <= val[0]) return 0;
     if (x >= val[n-1]) return n-1;
