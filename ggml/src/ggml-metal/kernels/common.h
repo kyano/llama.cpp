@@ -45,6 +45,35 @@ constexpr constant static float kvalues_mxfp4_f[16] = {
     0, .5f, 1.f, 1.5f, 2.f, 3.f, 4.f, 6.f, -0, -.5f, -1.f, -1.5f, -2.f, -3.f, -4.f, -6.f
 };
 
+// UE4M3 scale lookup table (128 entries, unsigned E4M3 with bias=7)
+struct ue4m3_table {
+    float data[128];
+    constexpr ue4m3_table() : data{} {
+        for (int x = 0; x < 128; ++x) {
+            if (x == 0 || x == 0x7F) {
+                data[x] = 0.0f;
+            } else {
+                int exp = (x >> 3) & 0xF;
+                int man = x & 0x7;
+                if (exp == 0) {
+                    // subnormal: man * 2^(-9)
+                    data[x] = (float)man / 512.0f;
+                } else {
+                    // normal: (1 + man/8) * 2^(exp-7)
+                    float mantissa = 1.0f + (float)man / 8.0f;
+                    float scale = 1.0f;
+                    int e = exp - 7;
+                    if (e > 0) { for (int i = 0; i < e;  ++i) scale *= 2.0f; }
+                    if (e < 0) { for (int i = 0; i < -e; ++i) scale *= 0.5f; }
+                    data[x] = mantissa * scale;
+                }
+            }
+        }
+    }
+};
+constexpr constant static ue4m3_table kvalues_ue4m3_table = ue4m3_table();
+#define kvalues_ue4m3_f kvalues_ue4m3_table.data
+
 static inline int best_index_int8(int n, constant float * val, float x) {
     if (x <= val[0]) return 0;
     if (x >= val[n-1]) return n-1;

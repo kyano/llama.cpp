@@ -378,6 +378,48 @@ void dequantize_mxfp4_t4(device const block_mxfp4 * xb, short il, thread type4 &
     reg[3] = d * kvalues_mxfp4_f[(q2[4*il4 + 3] >> shr) & 0x0F];
 }
 
+// NVFP4: 64 elements = 4 sub-blocks of 16, each with a UE4M3 scale
+template <typename type4x4>
+void dequantize_nvfp4(device const block_nvfp4 * xb, short il, thread type4x4 & reg) {
+    device const uint8_t * qs = xb->qs + il * (QK_NVFP4_SUB/2);
+    const float d = kvalues_ue4m3_f[xb->d[il]];
+
+    float4x4 reg_f;
+
+    // low nibbles -> elements 0..7, high nibbles -> elements 8..15
+    for (int i = 0; i < 2; ++i) {
+        reg_f[i][0] = d * kvalues_mxfp4_f[qs[4*i + 0] & 0x0F];
+        reg_f[i][1] = d * kvalues_mxfp4_f[qs[4*i + 1] & 0x0F];
+        reg_f[i][2] = d * kvalues_mxfp4_f[qs[4*i + 2] & 0x0F];
+        reg_f[i][3] = d * kvalues_mxfp4_f[qs[4*i + 3] & 0x0F];
+    }
+    for (int i = 0; i < 2; ++i) {
+        reg_f[i+2][0] = d * kvalues_mxfp4_f[qs[4*i + 0] >> 4];
+        reg_f[i+2][1] = d * kvalues_mxfp4_f[qs[4*i + 1] >> 4];
+        reg_f[i+2][2] = d * kvalues_mxfp4_f[qs[4*i + 2] >> 4];
+        reg_f[i+2][3] = d * kvalues_mxfp4_f[qs[4*i + 3] >> 4];
+    }
+
+    reg = (type4x4) reg_f;
+}
+
+// t4 variant: il=0..15, each call produces 4 elements
+template <typename type4>
+void dequantize_nvfp4_t4(device const block_nvfp4 * xb, short il, thread type4 & reg) {
+    const short sub = il / 4;
+    const short rem = il % 4;
+    const short row = rem % 2;
+    const uint8_t shr = rem >= 2 ? 4 : 0;
+
+    device const uint8_t * qs = xb->qs + sub * (QK_NVFP4_SUB/2) + row * 4;
+    const float d = kvalues_ue4m3_f[xb->d[sub]];
+
+    reg[0] = d * kvalues_mxfp4_f[(qs[0] >> shr) & 0x0F];
+    reg[1] = d * kvalues_mxfp4_f[(qs[1] >> shr) & 0x0F];
+    reg[2] = d * kvalues_mxfp4_f[(qs[2] >> shr) & 0x0F];
+    reg[3] = d * kvalues_mxfp4_f[(qs[3] >> shr) & 0x0F];
+}
+
 template <typename type4x4>
 void dequantize_q2_K(device const block_q2_K *xb, short il, thread type4x4 & reg) {
     const float d = xb->d;
